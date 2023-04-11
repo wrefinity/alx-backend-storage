@@ -1,42 +1,45 @@
 #!/usr/bin/env python3
-"""
-more collection stats
-"""
+""" More on Stats """
 from pymongo import MongoClient
 
 
-def log_stats():
-    """ document stats.
-    """
-    client = MongoClient('mongodb://127.0.0.1:27017')
-    logs_collection = client.logs.nginx
-    total = logs_collection.count_documents({})
-    get = logs_collection.count_documents({"method": "GET"})
-    post = logs_collection.count_documents({"method": "POST"})
-    put = logs_collection.count_documents({"method": "PUT"})
-    patch = logs_collection.count_documents({"method": "PATCH"})
-    delete = logs_collection.count_documents({"method": "DELETE"})
-    path = logs_collection.count_documents(
-        {"method": "GET", "path": "/status"})
-    print(f"{total} logs")
+def nginx_stats_check():
+    """ provides some stats about Nginx logs stored in MongoDB:"""
+    client = MongoClient()
+    collection = client.logs.nginx
+
+    num_of_docs = collection.count_documents({})
+    print("{} logs".format(num_of_docs))
     print("Methods:")
-    print(f"\tmethod GET: {get}")
-    print(f"\tmethod POST: {post}")
-    print(f"\tmethod PUT: {put}")
-    print(f"\tmethod PATCH: {patch}")
-    print(f"\tmethod DELETE: {delete}")
-    print(f"{path} status check")
+    methods_list = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    for md in methods_list:
+        method_count = collection.count_documents({"method": md})
+        print("\tmethod {}: {}".format(md, method_count))
+    status = collection.count_documents({"method": "GET", "path": "/status"})
+    print("{} status check".format(status))
+
     print("IPs:")
-    sorted_ips = logs_collection.aggregate(
-        [{"$group": {"_id": "$ip", "count": {"$sum": 1}}},
-         {"$sort": {"count": -1}}])
-    c = 0
-    for x in sorted_ips:
-        if c == 10:
-            break
-        print(f"\t{x.get('_id')}: {x.get('count')}")
-        c += 1
+
+    tp_ips = collection.aggregate([
+        {"$group":
+         {
+             "_id": "$ip",
+             "count": {"$sum": 1}
+         }
+         },
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {
+            "_id": 0,
+            "ip": "$_id",
+            "count": 1
+        }}
+    ])
+    for tp in tp_ips:
+        count = tp.get("count")
+        ip_address = tp.get("ip")
+        print("\t{}: {}".format(ip_address, count))
 
 
 if __name__ == "__main__":
-    log_stats()
+    nginx_stats_check()
